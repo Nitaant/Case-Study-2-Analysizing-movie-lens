@@ -1,0 +1,340 @@
+---
+title: "Case Study 2 - Analyzing data from MovieLens"
+author: "DS501 - Introduction to Data Science"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+## Introduction
+
+**Desired outcome of the case study.** In this case study we will look at the movies data set from MovieLens. It contains data about users and how they rate movies. The idea is to analyze the data set, make conjectures, support or refute those conjectures with data, and tell a story about the data!
+
+## Problem 1: Importing the MovieLens data set and merging it into a single data frame
+
+<https://raw.githubusercontent.com/dnchari/DS501_MovieLens/master/Results/unifiedMLDataMulti.csv>
+
+```{r}
+movielens = 'https://raw.githubusercontent.com/dnchari/DS501_MovieLens/master/Results/unifiedMLDataMulti.csv'
+mlData = read.csv(movielens)
+```
+
+**Report some basic details of the data you collected. For example:**
+
+-   How many movies have an average rating over 4.5 overall?
+
+```{r}
+movie_avg_rating <- aggregate(rating ~ movie_title,mlData,mean)
+movies_over_45 <- sum(movie_avg_rating$rating >= 4.5)
+movies_over_45
+```
+
+-   How many movies have an average rating over 4.5 among men? How about women?
+
+```{r}
+movie_avg_rating_by_gender <- aggregate(rating ~ movie_title + gender, mlData, mean)
+n_movies_over_45_male <-
+sum(movie_avg_rating_by_gender$rating[movie_avg_rating_by_gender$gender == "M"] >= 4.5)
+n_movies_over_45_male
+```
+
+```{r}
+n_movies_over_45_female <- sum(movie_avg_rating_by_gender$rating[movie_avg_rating_by_gender$gender == "F"] >= 4.5)
+n_movies_over_45_female
+```
+
+-   How many movies have an median rating over 4.5 among men over age 30? How about women over age 30?
+
+```{r}
+library(dplyr)
+df_age_gt_30 <- mlData[mlData$age >= 30,]
+
+# Group data by movie title and gender and calculate median rating
+df_med <- df_age_gt_30 %>%
+  group_by(movie_title, gender) %>%
+  summarise_at(vars("rating"), median)
+
+# Count number of movies with median rating over 4.5 among men and women over age 30
+n_movies_over_45_male_age30 <- sum(df_med$gender == "M" & df_med$rating >= 4.5)
+n_movies_over_45_male_age30
+
+```
+
+```{r}
+n_movies_over_45_female_age30 <- sum(df_med$gender == "F" & df_med$rating >= 4.5)
+n_movies_over_45_female_age30
+```
+
+-   What are the ten most popular movies?
+
+```{r message=TRUE, warning=TRUE}
+movie_rating_counts <- aggregate(rating ~ movie_title, mlData, length)
+top_movies <- movie_rating_counts[order(movie_rating_counts$rating, decreasing = TRUE),]
+top_10_movies <- head(top_movies, n = 10)
+top_movie_name <- top_10_movies$movie_title
+top_movie_name
+```
+
+```         
++ Choose what you consider to be a reasonable defintion of "popular".
++ Be perpared to defend this choice.
+```
+
+-   I chose the movies based on the number of ratings instead of just the ratings because the number of ratings gives as an idea about how many people watched the movie and put in the time to rate the movie .There are movies such as the room that are extremely popular but dont have good ratings.
+
+-   Make some conjectures about how easy various groups are to please? Support your answers with data!
+
+    -   For example, one might conjecture that people between the ages of 1 and 10 are the easiest to please since they are all young children. This conjecture may or may not be true, but how would you support or disprove either conclusion with with data?
+    -   Be sure to come up with your own conjectures and support them with data!
+
+    ```{r}
+    #Congecture: People who watch more movies are harder to please than those who watch less movies.
+    #For this I will calculate the number of raters who have watched movies > 500 and less than 100 as frequent and infrequent raters and will calculate the mean of both.
+    #If I find that the mean of frequent raters is less as compared to infrequent raters, I will be able to support my conjucture
+    library(dplyr)
+
+    # Join the number of ratings to the movies data frame
+
+    frequent_raters <- mlData %>% group_by(movie_title) %>% 
+                           filter(n() >= 500) %>% ungroup()
+    infrequent_raters<- mlData %>% group_by(movie_title) %>% 
+                           filter(n() < 100) %>% ungroup()
+    # Calculate the mean rating for each group
+    frequent_mean_rating <- mean(frequent_raters$rating)
+    infrequent_mean_rating <- mean(infrequent_raters$rating)
+
+    frequent_mean_rating
+    ```
+
+```{r}
+infrequent_mean_rating
+```
+
+```{r}
+# Compare the mean ratings
+if (frequent_mean_rating < infrequent_mean_rating) {
+  print("The conjecture is supported: people who rate more movies are harder to please.")
+} else {
+  print("The conjecture that frequent movie watchers are more strict with their ratings is not supported.")
+}
+```
+
+## Problem 2: Expand our investigation to histograms
+
+**An obvious issue with any inferences drawn from Problem 1 is that we did not consider how many times a movie was rated.**
+
+-   Plot a histogram of the ratings of all movies.
+
+```{r}
+hist(mlData$rating, main = "Histogram of Movie Ratings", xlab = "Rating")
+```
+
+-   Plot a histogram of the number of ratings each movie recieved.
+
+```{r}
+movie_ratings <- aggregate(mlData$rating, by=list(movie=mlData$movie_title), FUN=length)
+hist(movie_ratings$x, main = "Histogram of Number of Ratings per Movie", xlab = "Number of Ratings")
+
+```
+
+-   Plot a histogram of the average rating for each movie.
+
+```{r}
+movie_avg_ratings <- aggregate(mlData$rating, by=list(movie=mlData$movie_title), FUN=mean)
+hist(movie_avg_ratings$x, main = "Histogram of Average Movie Ratings", xlab = "Average Rating")
+
+```
+
+-   Plot a histogram of the average rating for movies which are rated more than 100 times.
+
+```{r}
+popular_movies <- names(table(mlData$movie_title)[table(mlData$movie_title) > 100])
+popular_movie_data <- mlData[mlData$movie_title %in% popular_movies, ]
+popular_movie_avg_ratings <- aggregate(popular_movie_data$rating, by=list(movie=popular_movie_data$movie_title), FUN=mean)
+hist(popular_movie_avg_ratings$x, main = "Histogram of Average Ratings for Popular Movies", xlab = "Average Rating")
+```
+
+```         
++ What do you observe about the tails of the histogram where you use all the movies versus the one where you only use movies rated more than 100 times?
++ Which highly rated movies would you trust are actually good? Those rated more than 100 times or those rated less than 100 times?
+```
+
+-   Make some conjectures about the distribution of ratings? Support your answers with data!
+
+    -   For example, what age range do you think has more extreme ratings? Do you think children are more or less likely to rate a movie 1 or 5?
+    -   Be sure to come up with your own conjectures and support them with data!
+
+    ```{r}
+    #Conjuncture : Children are more easily impressed and give ratings very easily.
+    #In this, I created three sectiobs :
+    #children = 0-13
+    #teenagers = 13-19
+    #adults = 21+
+
+    library(dplyr)
+    library(ggplot2)
+
+    # Group ratings by age and calculate the mean 
+    mlData$age_range <- cut(mlData$age, breaks = c(0, 13, 19,21,Inf), labels = c("0-13", "13-19", "19 - 21","21+"))
+
+    # Calculate the proportion of 5-star ratings for each age range
+    prop_5star <- aggregate(rating == 5 ~ age_range, data = mlData, mean)
+
+    # Plot the results
+    barplot(prop_5star$`rating == 5`, names.arg = prop_5star$age_range, 
+            main = "Proportion of 5-Star Ratings by Age Range", 
+            xlab = "Age Range", ylab = "percentage 5-Star", ylim = c(0,0.3), col = "steelblue")
+    ```
+
+    ```{r}
+    # After doing the work I noticed that the example was already given by the professor, But I wanted to use this example in problem 4, hence I did it.
+    #Here is one more conjecture.
+    #The strictness in ratings depends on the genre, that is people who watch comedy are more line ant graders as compared to those who watch thriller, horror.
+
+    genre_ratings <- mlData %>%
+      group_by(genre, rating) %>%
+      summarise(count = n())
+
+    # Calculate the proportion of each rating for each genre
+    genre_ratings <- genre_ratings %>%
+      group_by(genre) %>%
+      mutate(percent = count / sum(count))
+
+    # Plot the distribution of ratings for each genre
+    ggplot(genre_ratings, aes(x = rating, y = percent, fill = genre)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      ggtitle("Distribution of Ratings by Genre") +
+      xlab("Rating") +
+      ylab("Proportion") +
+      theme(legend.position = "top")
+
+    #From this we can understand that fantasy genre is always the most popular genres with higher rating and there have been extremely less fantasy movies that have 1 or 2 rating. Drama having the highest number of 3 star ratings and hence there seems to be some kind of partiality in rating based on the genre
+    ```
+
+## Problem 3: Correlation: Men versus women
+
+**Let us look more closely at the relationship between the pieces of data we have.**
+
+-   Make a scatter plot of men versus women and their mean rating for every movie.
+
+```{r}
+library("ggplot2")
+male_ratings <- mlData[mlData$gender == "M", ]
+female_ratings <- mlData[mlData$gender == "F", ]
+male_mean_ratings <- aggregate(rating ~ movie_title, data = male_ratings, mean)
+female_mean_ratings <- aggregate(rating ~ movie_title, data = female_ratings, mean)
+merged_rating <- merge(male_mean_ratings, female_mean_ratings, by = "movie_title", suffixes = c("_male", "_female"))
+plot(x = merged_rating$rating_male, y = merged_rating$rating_female, 
+     main = "Mean Movie Ratings by Gender", xlab = "Male Mean Rating", ylab = "Female Mean Rating",cex=0.5)
+
+```
+
+```{r}
+cor(merged_rating$rating_male, merged_rating$rating_female)
+
+```
+
+-   Make a scatter plot of men versus women and their mean rating for movies rated more than 200 times.
+
+```{r}
+install.packages("dplyr")
+install.packages("ggplot2")
+library(dplyr)
+library(ggplot2)
+rated_more_than_200 <- mlData %>% group_by(movie_title) %>% 
+                       filter(n() > 200) %>% ungroup()
+
+# Create separate data frames for male and female ratings
+male_ratings <- rated_more_than_200 %>% filter(gender == "M")
+female_ratings <- rated_more_than_200 %>% filter(gender == "F")
+
+# Calculate the mean rating for each movie and gender
+male_mean_ratings <- aggregate(rating ~ movie_title, data = male_ratings, mean)
+female_mean_ratings <- aggregate(rating ~ movie_title, data = female_ratings, mean)
+
+# Merge the two data frames
+merged_ratings <- merge(male_mean_ratings, female_mean_ratings, by = "movie_title", suffixes = c("_male", "_female"))
+
+# Make the scatter plot
+plot(x = merged_ratings$rating_male, y = merged_ratings$rating_female, main = "Mean Movie Ratings by Gender for Movies Rated More Than 200 Times", 
+     xlab = "Male Mean Rating", ylab = "Female Mean Rating", cex = 0.5)
+
+
+```
+
+-   Compute the correlation coefficent between the ratings of men and women.
+
+```{r}
+cor(merged_ratings$rating_male, merged_ratings$rating_female)
+```
+
+```         
++ What do you observe?
+I observed that the coeff ratings for mean rating of all movies is 0.515 and for top 200 movies it is 0.804
++ Are the ratings similiar or not? Support your answer with data!
+The ratings are not similar
+The reasons for this might be
+1) Sample size : the sample size has a vast difference between both of the dataframes.
+2) Selection bias: We have already seen that the top movies are star wars, jedi and such movies whose distribution can be quite different as compared to a not so popular bad movies..
+```
+
+-   Conjecture under what circumstances the rating given by one gender can be used to predict the rating given by the other gender.
+
+    -   For example, are men and women more similar when they are younger or older?
+    -   Be sure to come up with your own conjectures and support them with data!
+
+    ```{r}
+    occ_gender_ratings <- mlData %>%
+      group_by(occupation, gender, rating) %>%
+      summarise(count = n())
+
+    # Calculate the proportion of each rating for each occupation and gender
+    occ_gender_ratings <- occ_gender_ratings %>%
+      group_by(occupation, gender) %>%
+      mutate(prop = count / sum(count))
+
+    # Plot the distribution of ratings for each occupation and gender
+    ggplot(occ_gender_ratings, aes(x = rating, y = prop, fill = occupation)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      facet_wrap(~gender) +
+      ggtitle("Distribution of Ratings by Occupation and Gender") +
+      xlab("Rating") +
+      ylab("Proportion") +
+      theme(legend.position = "top")
+    ```
+
+    ```{r}
+    #From this we can infer that in both genders, programmers, retired people, artist,student, etc have similar style of rating. Thus it is possible to use dataset from a M student to predict the ratings given by an F student. However there are still a few sectors that have extremely low correlation for example artist. I wish I could calculate the corelation between both the genders with the occupations but the computation time is too big for my laptop.
+    ```
+
+## Problem 4: Open Ended Question: Business Intelligence
+
+-   Do any of your conjectures in Problems 1, 2, and 3 provide insights that a movie company might be interested in? Answer - Yes, absolutely! Conjecture 1 helps us identify that there is extremely less bias between frequent viewers and infrequent viewers. Hence each and every project can have a different outcome. Movie franchises such as Star Wars, Marvel are famous for milking their movies just based on the name tag however movies that Nolan releases are completely new and are not franchised and still make hundreds of millions of dollars. Hence it doesn't matter if a movie belongs to a specific franchise, the only thing that matters is the content. Conjecture 2a we found out that teenagers are the highest raters of movie which can help with the popularity of the movie. Hence having the current knowledge about what kind of content teenagers are into can significantly help with the popularity. Conjecture 2b gives us an idea about what kind of genres are preferred based on the rating they have received. These also shows fantasy is the most popular genre hence correlating with the teenager conjecture from above. Conjecture 3 helps us identify the correlation between the genders as well as their occupation which can help predict if a given movie will be watched by either of the gender or not. We can also add one more correlation using the genre to find out what kind of occupations are into what kind of genres.
+
+-   Propose a business question that you think this data can answer. Answer - Question 1) How can we leverage the data given to optimize decision making process such that our chances of success are improved? Question 2) What are the popular genre that teenagers are into? Question 3) Should we invest in movie franchises or standalone movies to cater a wider target audience?
+
+-   Suppose you are a Data Sciencetist at a movie company. Convince your boss that your conjecture is correct!
+
+There is extremely less bias between frequent viewers and infrequent viewers. To support this conjecture, I have analyzed the data on viewing frequency and found that the average ratings for frequent viewers and infrequent viewers are very similar. This indicates that the quality of the content is more important than the frequency of viewing, and that we should focus on producing high-quality movies that appeal to a wide range of viewers, regardless of their viewing frequency. This also suggests that we can experiment with different genres and styles of movies without being too concerned about the audience bias.
+
+Teenagers are the highest raters of movies, which can help with the popularity of the movie. To support this conjecture, I have analyzed the data on movie ratings by age group and found that teenagers consistently rate movies higher than other age groups. This indicates that we should consider the preferences of teenagers when developing new movies and marketing campaigns, as they are the most likely to engage with and promote our content. This also suggests that we can target social media and other online platforms that are popular among teenagers to promote our movies.
+
+Fantasy is the most popular genre based on the rating they have received, correlating with the teenager conjecture. To support this conjecture, I have analyzed the data on movie ratings by genre and found that fantasy movies consistently receive higher ratings than other genres. This is consistent with the teenage conjecture, as teenagers are known to be avid fans of fantasy and sci-fi movies. This indicates that we should consider developing more movies in the fantasy genre to cater to this audience, and that we can use the popularity of the genre to promote our movies to a wider audience.
+
+## Done
+
+All set!
+
+**What do you need to submit?**
+
+1.  Report: please prepare a report based on what you found in the data.
+
+-   What data you collected?
+-   Why this topic is interesting or important to you? (Motivations)
+-   How did you analyze the data?
+-   What did you find in the data? (please include figures or tables in the report)
+
+2.  R Code with RMarkdown, compile it to PDF
+
+How to submit: - Submit PDF file on Course Webpage on Canvas only. Do not email it to me.
